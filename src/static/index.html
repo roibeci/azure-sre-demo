@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SRE Demo Shop</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: white;
+            border-radius: 12px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .logo span {
+            color: #764ba2;
+        }
+        
+        .status-panel {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-badge.healthy {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-badge.chaos {
+            background: #f8d7da;
+            color: #721c24;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .cart-icon {
+            position: relative;
+            cursor: pointer;
+            font-size: 24px;
+        }
+        
+        .cart-count {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #e74c3c;
+            color: white;
+            font-size: 12px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+        
+        @media (max-width: 900px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .products-section, .cart-section, .metrics-section {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .category-filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .filter-btn:hover, .filter-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .product-card {
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 15px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .product-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .product-icon {
+            font-size: 40px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        .product-name {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .product-category {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        
+        .product-price {
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .add-btn {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        
+        .add-btn:hover {
+            opacity: 0.9;
+        }
+        
+        .add-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .cart-items {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .cart-item-name {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .cart-item-price {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .cart-total {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .checkout-btn {
+            width: 100%;
+            margin-top: 15px;
+            padding: 15px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .checkout-btn:hover {
+            background: #219a52;
+        }
+        
+        .checkout-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .metrics-section {
+            margin-top: 20px;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        
+        .metric-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .metric-value.slow {
+            color: #e74c3c;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: #333;
+            color: white;
+            border-radius: 8px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+        }
+        
+        .toast.show {
+            opacity: 1;
+        }
+        
+        .toast.error {
+            background: #e74c3c;
+        }
+        
+        .toast.success {
+            background: #27ae60;
+        }
+        
+        .empty-cart {
+            text-align: center;
+            padding: 30px;
+            color: #888;
+        }
+        
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .chaos-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            background: #fff3cd;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .chaos-toggle label {
+            font-size: 14px;
+            color: #856404;
+        }
+        
+        .switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 26px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #e74c3c;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🛒 SRE Demo <span>Shop</span></div>
+            <div class="status-panel">
+                <div id="status-badge" class="status-badge healthy">● Healthy</div>
+                <div class="cart-icon" onclick="scrollToCart()">
+                    🛒
+                    <span id="cart-count" class="cart-count">0</span>
+                </div>
+            </div>
+        </header>
+        
+        <div class="main-content">
+            <div class="left-column">
+                <div class="products-section">
+                    <h2 class="section-title">📦 Products</h2>
+                    
+                    <div class="category-filters">
+                        <button class="filter-btn active" onclick="filterProducts('all')">All</button>
+                        <button class="filter-btn" onclick="filterProducts('electronics')">Electronics</button>
+                        <button class="filter-btn" onclick="filterProducts('audio')">Audio</button>
+                        <button class="filter-btn" onclick="filterProducts('home')">Home</button>
+                        <button class="filter-btn" onclick="filterProducts('furniture')">Furniture</button>
+                    </div>
+                    
+                    <div id="products-grid" class="products-grid">
+                        <div class="loading"></div> Loading products...
+                    </div>
+                </div>
+                
+                <div class="metrics-section">
+                    <h2 class="section-title">📊 Performance Metrics</h2>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div id="metric-requests" class="metric-value">0</div>
+                            <div class="metric-label">Total Requests</div>
+                        </div>
+                        <div class="metric-card">
+                            <div id="metric-latency" class="metric-value">0ms</div>
+                            <div class="metric-label">Avg Latency</div>
+                        </div>
+                        <div class="metric-card">
+                            <div id="metric-errors" class="metric-value">0</div>
+                            <div class="metric-label">Errors</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <div class="cart-section" id="cart-section">
+                    <h2 class="section-title">🛒 Your Cart</h2>
+                    
+                    <div id="cart-items" class="cart-items">
+                        <div class="empty-cart">Your cart is empty</div>
+                    </div>
+                    
+                    <div class="cart-total">
+                        <span>Total:</span>
+                        <span id="cart-total">$0.00</span>
+                    </div>
+                    
+                    <button id="checkout-btn" class="checkout-btn" onclick="checkout()" disabled>
+                        Checkout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast"></div>
+    
+    <script>
+        const API_BASE = '';
+        let products = [];
+        let cart = [];
+        let userId = 'user-' + Math.random().toString(36).substr(2, 9);
+        let metrics = { requests: 0, totalLatency: 0, errors: 0 };
+        
+        const productIcons = {
+            'Laptop Pro 15': '💻',
+            'Wireless Mouse': '🖱️',
+            'USB-C Hub': '🔌',
+            'Mechanical Keyboard': '⌨️',
+            '4K Monitor': '🖥️',
+            'Headphones Pro': '🎧',
+            'Bluetooth Speaker': '🔊',
+            'Webcam HD': '📷',
+            'Desk Lamp': '💡',
+            'Ergonomic Chair': '🪑'
+        };
+        
+        async function fetchWithMetrics(url, options = {}) {
+            const start = performance.now();
+            metrics.requests++;
+            
+            try {
+                const response = await fetch(url, options);
+                const latency = performance.now() - start;
+                metrics.totalLatency += latency;
+                updateMetrics(latency);
+                
+                if (!response.ok) {
+                    metrics.errors++;
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                return response;
+            } catch (error) {
+                metrics.errors++;
+                updateMetrics(0);
+                throw error;
+            }
+        }
+        
+        function updateMetrics(latency) {
+            document.getElementById('metric-requests').textContent = metrics.requests;
+            
+            const avgLatency = Math.round(metrics.totalLatency / metrics.requests);
+            const latencyEl = document.getElementById('metric-latency');
+            latencyEl.textContent = avgLatency + 'ms';
+            latencyEl.className = avgLatency > 1000 ? 'metric-value slow' : 'metric-value';
+            
+            document.getElementById('metric-errors').textContent = metrics.errors;
+        }
+        
+        async function loadProducts(category = 'all') {
+            const grid = document.getElementById('products-grid');
+            grid.innerHTML = '<div class="loading"></div> Loading products...';
+            
+            try {
+                const url = category === 'all' 
+                    ? `${API_BASE}/api/products`
+                    : `${API_BASE}/api/products?category=${category}`;
+                    
+                const response = await fetchWithMetrics(url);
+                const data = await response.json();
+                products = data.products;
+                renderProducts(products);
+                checkChaosMode(data);
+            } catch (error) {
+                grid.innerHTML = `<div style="color: #e74c3c;">Error loading products: ${error.message}</div>`;
+                showToast('Failed to load products', 'error');
+            }
+        }
+        
+        async function checkHealth() {
+            try {
+                const response = await fetchWithMetrics(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                const badge = document.getElementById('status-badge');
+                if (data.chaos_mode) {
+                    badge.textContent = '⚠️ Chaos Mode';
+                    badge.className = 'status-badge chaos';
+                } else {
+                    badge.textContent = '● Healthy';
+                    badge.className = 'status-badge healthy';
+                }
+            } catch (error) {
+                const badge = document.getElementById('status-badge');
+                badge.textContent = '● Error';
+                badge.className = 'status-badge chaos';
+            }
+        }
+        
+        function checkChaosMode(data) {
+            // Check from response headers or health endpoint
+        }
+        
+        function renderProducts(products) {
+            const grid = document.getElementById('products-grid');
+            
+            if (products.length === 0) {
+                grid.innerHTML = '<div style="color: #888;">No products found</div>';
+                return;
+            }
+            
+            grid.innerHTML = products.map(product => `
+                <div class="product-card">
+                    <div class="product-icon">${productIcons[product.name] || '📦'}</div>
+                    <div class="product-name">${product.name}</div>
+                    <div class="product-category">${product.category}</div>
+                    <div class="product-price">$${product.price.toFixed(2)}</div>
+                    <button class="add-btn" onclick="addToCart(${product.id})">
+                        Add to Cart
+                    </button>
+                </div>
+            `).join('');
+        }
+        
+        function filterProducts(category) {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            loadProducts(category);
+        }
+        
+        async function addToCart(productId) {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span>';
+            
+            try {
+                const response = await fetchWithMetrics(`${API_BASE}/api/cart/${userId}/add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ product_id: productId, quantity: 1 })
+                });
+                
+                const data = await response.json();
+                cart = data.items;
+                renderCart();
+                showToast('Added to cart!', 'success');
+            } catch (error) {
+                showToast('Failed to add to cart: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Add to Cart';
+            }
+        }
+        
+        function renderCart() {
+            const cartItems = document.getElementById('cart-items');
+            const cartCount = document.getElementById('cart-count');
+            const cartTotal = document.getElementById('cart-total');
+            const checkoutBtn = document.getElementById('checkout-btn');
+            
+            cartCount.textContent = cart.length;
+            
+            if (cart.length === 0) {
+                cartItems.innerHTML = '<div class="empty-cart">Your cart is empty</div>';
+                cartTotal.textContent = '$0.00';
+                checkoutBtn.disabled = true;
+                return;
+            }
+            
+            let total = 0;
+            cartItems.innerHTML = cart.map(item => {
+                total += item.product.price * item.quantity;
+                return `
+                    <div class="cart-item">
+                        <div>
+                            <div class="cart-item-name">${item.product.name}</div>
+                            <div style="font-size: 12px; color: #888;">Qty: ${item.quantity}</div>
+                        </div>
+                        <div class="cart-item-price">$${(item.product.price * item.quantity).toFixed(2)}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            cartTotal.textContent = '$' + total.toFixed(2);
+            checkoutBtn.disabled = false;
+        }
+        
+        async function checkout() {
+            const btn = document.getElementById('checkout-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span> Processing...';
+            
+            try {
+                const response = await fetchWithMetrics(`${API_BASE}/api/checkout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                cart = [];
+                renderCart();
+                showToast(`Order ${data.order_id} confirmed! Total: $${data.total.toFixed(2)}`, 'success');
+            } catch (error) {
+                showToast('Checkout failed: ' + error.message, 'error');
+            } finally {
+                btn.disabled = cart.length === 0;
+                btn.innerHTML = 'Checkout';
+            }
+        }
+        
+        function scrollToCart() {
+            document.getElementById('cart-section').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast show ${type}`;
+            
+            setTimeout(() => {
+                toast.className = 'toast';
+            }, 3000);
+        }
+        
+        // Initialize
+        loadProducts();
+        checkHealth();
+        
+        // Refresh health status periodically
+        setInterval(checkHealth, 10000);
+    </script>
+</body>
+</html>

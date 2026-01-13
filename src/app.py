@@ -12,6 +12,7 @@ import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger('shopping-app')
@@ -70,12 +71,37 @@ def simulate_payment():
 
 
 class ShoppingHandler(BaseHTTPRequestHandler):
+    # Static file directory
+    STATIC_DIR = Path(__file__).parent / 'static'
+    
     def send_json(self, data, status=200):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('X-Response-Time', str(self.response_time))
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
+
+    def send_static(self, filepath, content_type):
+        """Serve static files"""
+        try:
+            with open(filepath, 'rb') as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', content_type)
+            self.send_header('Content-Length', len(content))
+            self.end_headers()
+            self.wfile.write(content)
+        except FileNotFoundError:
+            self.send_error(404, 'File not found')
+
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
 
     def do_GET(self):
         start_time = time.time()
@@ -84,7 +110,23 @@ class ShoppingHandler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
 
         try:
-            if path == '/' or path == '/health':
+            # Serve frontend
+            if path == '/':
+                index_file = self.STATIC_DIR / 'index.html'
+                if index_file.exists():
+                    self.send_static(index_file, 'text/html')
+                    return
+                # Fallback to health if no frontend
+                self.response_time = simulate_latency(BASE_LATENCY)
+                self.send_json({
+                    "status": "healthy",
+                    "service": "shopping-app",
+                    "version": "1.0.0",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "chaos_mode": CHAOS_MODE
+                })
+
+            elif path == '/health':
                 self.response_time = simulate_latency(BASE_LATENCY)
                 self.send_json({
                     "status": "healthy",
