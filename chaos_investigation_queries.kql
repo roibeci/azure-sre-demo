@@ -1,0 +1,228 @@
+// ============================================================================
+// SRE AGENT - CHAOS SCENARIO INVESTIGATION QUERIES
+// Run these in ADX Web UI to investigate the chaos scenario
+// ============================================================================
+
+// ============================================================================
+// 1. REAL-TIME DASHBOARD QUERIES
+// ============================================================================
+
+// Overall system health - last 30 minutes
+let timeWindow = 30m;
+ApplicationGatewayAccessLogs
+| where TimeGenerated > ago(timeWindow)
+| summarize 
+    TotalRequests = count(),
+    SuccessRequests = countif(HttpStatus < 400),
+    ClientErrors = countif(HttpStatus >= 400 and HttpStatus < 500),
+    ServerErrors = countif(HttpStatus >= 500),
+    AvgLatencyMs = round(avg(ResponseTime) * 1000, 2),
+    P95LatencyMs = round(percentile(ResponseTime, 95) * 1000, 2)
+    by bin(TimeGenerated, 1m)
+| order by TimeGenerated desc
+
+// ============================================================================
+// 2. ERROR ANALYSIS QUERIES
+// ============================================================================
+
+// Error breakdown by status code
+ApplicationGatewayAccessLogs
+| where TimeGenerated > ago(30m)
+| where HttpStatus >= 400
+| summarize 
+    Count = count(),
+    FirstSeen = min(TimeGenerated),
+    LastSeen = max(TimeGenerated),
+    UniqueClients = dcount(ClientIP),
+    SampleURIs = make_set(RequestUri, 5)
+    by HttpStatus, ErrorInfo
+| order by Count desc
+
+// Backend health analysis
+ApplicationGatewayAccessLogs
+| where TimeGenerated > ago(30m)
+| summarize 
+    TotalRequests = count(),
+    Errors = countif(HttpStatus >= 500),
+    ErrorRate = round(100.0 * countif(HttpStatus >= 500) / count(), 2),
+    AvgBackendLatency = round(avg(BackendResponseTime) * 1000, 2),
+    BackendStatuses = make_set(ServerStatus, 10)
+    by BackendServer, BackendPoolName
+| where Errors > 0
+| order by ErrorRate desc
+
+// ============================================================================
+// 3. CONTAINER LOG ANALYSIS
+// ============================================================================
+
+// Pod errors and crashes
+ContainerLogs
+| where TimeGenerated > ago(30m)
+| where LogEntry contains "ERROR" or LogEntry contains "FATAL" or LogEntry contains "Exception"
+| summarize 
+    ErrorCount = count(),
+    FirstError = min(TimeGenerated),
+    LastError = max(TimeGenerated),
+    SampleLogs = make_list(LogEntry, 5)
+    by PodName, Namespace, ContainerName
+| order by ErrorCount desc
+
+// OOMKill detection (memory stress scenario)
+ContainerLogs
+| where TimeGenerated > ago(30m)
+| where PodName contains "memory-stress"
+| where LogEntry contains "Allocated" or LogEntry contains "Out of memory"
+| project TimeGenerated, PodName, LogEntry
+| order by TimeGenerated desc
+
+// Crash loop detection
+ContainerLogs
+| where TimeGenerated > ago(30m)
+| where PodName contains "crash-loop"
+| where LogEntry contains "ERROR" or LogEntry contains "FATAL"
+| project TimeGenerated, PodName, LogEntry
+| order by TimeGenerated desc
+
+// ============================================================================
+// 4. LATENCY ANALYSIS
+// ============================================================================
+
+// Slow response detection (slow-backend scenario)
+ApplicationGatewayAccessLogs
+| where TimeGenerated > ago(30m)
+| where ResponseTime > 1.0  // More than 1 second
+| summarize 
+    SlowRequests = count(),
+    AvgResponseTime = round(avg(ResponseTime), 3),
+    MaxResponseTime = round(max(ResponseTime), 3),
+    P95ResponseTime = round(percentile(ResponseTime, 95), 3)
+    by bin(TimeGenerated, 1m), BackendServer
+| order by TimeGenerated desc
+
+// Latency distribution
+ApplicationGatewayAccessLogs
+| where TimeGenerated > ago(30m)
+| summarize 
+    Under100ms = countif(ResponseTime < 0.1),
+    Under500ms = countif(ResponseTime >= 0.1 and ResponseTime < 0.5),
+    Under1s = countif(ResponseTime >= 0.5 and ResponseTime < 1.0),
+    Under5s = countif(ResponseTime >= 1.0 and ResponseTime < 5.0),
+    Over5s = countif(ResponseTime >= 5.0)
+    by bin(TimeGenerated, 5m)
+| order by TimeGenerated desc
+
+// ============================================================================
+// 5. CORRELATION ANALYSIS
+// ============================================================================
+
+// Correlate App Gateway errors with Container errors
+let appGwErrors = ApplicationGatewayAccessLogs
+    | where TimeGenerated > ago(30m)
+    | where HttpStatus >= 500
+    | summarize AppGWErrors = count() by bin(TimeGenerated, 1m);
+let containerErrors = ContainerLogs
+    | where TimeGenerated > ago(30m)
+    | where LogEntry contains "ERROR" or LogEntry contains "FATAL"
+    | summarize ContainerErrors = count() by bin(TimeGenerated, 1m);
+appGwErrors
+| join kind=inner (containerErrors) on TimeGenerated
+| project TimeGenerated, AppGWErrors, ContainerErrors, 
+          CorrelationScore = AppGWErrors * ContainerErrors
+| where CorrelationScore > 0
+| order by TimeGenerated desc
+
+// Timeline of all issues
+union 
+    (ApplicationGatewayAccessLogs 
+        | where TimeGenerated > ago(30m) 
+        | where HttpStatus >= 500 
+        | project TimeGenerated, EventType = "AppGW_Error", Details = strcat("HTTP ", HttpStatus, " - ", ErrorInfo)),
+    (ContainerLogs 
+        | where TimeGenerated > ago(30m) 
+        | where LogEntry contains "ERROR" or LogEntry contains "FATAL"
+        | project TimeGenerated, EventType = "Container_Error", Details = strcat(PodName, ": ", substring(LogEntry, 0, 100)))
+| order by TimeGenerated desc
+| take 100
+
+// ============================================================================
+// 6. ROOT CAUSE ANALYSIS
+// ============================================================================
+
+// Identify the root cause of backend failures
+ApplicationGatewayAccessLogs
+| where TimeGenerated > ago(30m)
+| where HttpStatus >= 500 or ErrorInfo != "ERRORINFO_NO_ERROR"
+| summarize 
+    Occurrences = count(),
+    FirstSeen = min(TimeGenerated),
+    LastSeen = max(TimeGenerated),
+    AffectedBackends = make_set(BackendServer, 10),
+    ErrorTypes = make_set(ErrorInfo, 10),
+    ServerStatuses = make_set(ServerStatus, 10)
+    by HttpStatus
+| extend Duration = LastSeen - FirstSeen
+| order by Occurrences desc
+
+// Identify which pods are causing issues
+ContainerLogs
+| where TimeGenerated > ago(30m)
+| summarize 
+    TotalLogs = count(),
+    ErrorLogs = countif(LogEntry contains "ERROR" or LogEntry contains "FATAL"),
+    ErrorRate = round(100.0 * countif(LogEntry contains "ERROR" or LogEntry contains "FATAL") / count(), 2)
+    by PodName, ContainerImage
+| where ErrorLogs > 0
+| order by ErrorRate desc
+
+// ============================================================================
+// 7. SRE AGENT INVESTIGATION SUMMARY
+// ============================================================================
+
+// Executive summary for incident response
+print "=== INCIDENT INVESTIGATION SUMMARY ==="
+| extend TimeWindow = "Last 30 minutes"
+| extend InvestigationTime = now();
+
+// Get key metrics
+let summary = ApplicationGatewayAccessLogs
+| where TimeGenerated > ago(30m)
+| summarize 
+    TotalRequests = count(),
+    ErrorRate = round(100.0 * countif(HttpStatus >= 500) / count(), 2),
+    AvgLatencyMs = round(avg(ResponseTime) * 1000, 2),
+    P99LatencyMs = round(percentile(ResponseTime, 99) * 1000, 2),
+    UnhealthyBackends = dcountif(BackendServer, HttpStatus >= 500);
+let containerSummary = ContainerLogs
+| where TimeGenerated > ago(30m)
+| summarize 
+    TotalPodErrors = countif(LogEntry contains "ERROR" or LogEntry contains "FATAL"),
+    AffectedPods = dcountif(PodName, LogEntry contains "ERROR" or LogEntry contains "FATAL");
+summary
+| extend placeholder = 1
+| join kind=inner (containerSummary | extend placeholder = 1) on placeholder
+| project-away placeholder, placeholder1
+
+// ============================================================================
+// 8. ALERT VALIDATION QUERIES
+// ============================================================================
+
+// Validate high error rate alert condition (> 5%)
+ApplicationGatewayAccessLogs
+| where TimeGenerated > ago(5m)
+| summarize 
+    TotalRequests = count(),
+    ErrorRequests = countif(HttpStatus >= 500),
+    ErrorRate = round(100.0 * countif(HttpStatus >= 500) / count(), 2)
+    by bin(TimeGenerated, 1m)
+| where ErrorRate > 5.0
+| project TimeGenerated, ErrorRate, AlertShouldFire = "Yes - High Error Rate"
+
+// Validate high latency alert condition (> 1000ms)
+ApplicationGatewayAccessLogs
+| where TimeGenerated > ago(5m)
+| summarize 
+    AvgResponseTimeMs = round(avg(ResponseTime) * 1000, 2),
+    P95ResponseTimeMs = round(percentile(ResponseTime, 95) * 1000, 2)
+    by bin(TimeGenerated, 1m)
+| where AvgResponseTimeMs > 1000 or P95ResponseTimeMs > 1000
+| project TimeGenerated, AvgResponseTimeMs, P95ResponseTimeMs, AlertShouldFire = "Yes - High Latency"
