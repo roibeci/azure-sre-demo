@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: memory-stress-daemonset
+  namespace: default
+  labels:
+    app: memory-stress-ds
+    scenario: chaos-demo
+spec:
+  selector:
+    matchLabels:
+      app: memory-stress-ds
+  template:
+    metadata:
+      labels:
+        app: memory-stress-ds
+        scenario: chaos-demo
+    spec:
+      containers:
+      - name: memory-hog
+        image: polinux/stress
+        command: ["stress"]
+        args: ["--vm", "4", "--vm-bytes", "1500M", "--vm-hang", "1"]
+        resources:
+          requests:
+            memory: "100Mi"
+            cpu: "50m"
