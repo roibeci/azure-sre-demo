@@ -41,9 +41,7 @@ spec:
     spec:
       containers:
       - name: shopping-app
-        # TODO: Update with your container registry image
-        # Build from src/Dockerfile: docker build -t <registry>/shopping-app:latest src/
-        image: ${CONTAINER_REGISTRY}/shopping-app:latest
+        image: acrsredemo28580.azurecr.io/shopping-app:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
