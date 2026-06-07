@@ -15,7 +15,7 @@ RESOURCE_GROUP="rg-sre-demo"
 LOCATION="swedencentral"
 VNET_NAME="vnet-sre-demo"
 VNET_ADDRESS_PREFIX="10.10.0.0/16"
-
+STORAGE="+wW6d9/4hJEywgjpF2uBm9qrUcig3onnHUEo8xcFnTmk/f8g+YLfjLj2Plz+cDPz+DygUh6Wh9JX+AStaKsqRQ=="
 
 # Subnet Configuration
 APPGW_SUBNET_NAME="snet-appgw"
